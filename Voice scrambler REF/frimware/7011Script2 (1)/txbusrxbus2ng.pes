@@ -1,0 +1,762 @@
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   vsrdemo1.pes : CMX 7011 FI load script for PE0002 and set transmit on
+;   +   CBUS1 receive on CBUS2. Noise gate active.
+;   +   Application support             CML Microcircuits (UK) Ltd
+;   +
+;   +   25th of May 2012                xxv.v.mmviii
+;   +
+;   +   Revision B                      Issue 1
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+;REVISION HISTORY
+;141022 - Updated file load for latest Function Image
+
+;   **************************************************************************
+;  **************************************************************************
+; *
+; *     Script preamble - define constants, variables and register widths
+; *
+;  **************************************************************************
+;   **************************************************************************
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +  Noise gate value
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+TX_NG_UPPER_LIMIT      const   800                 ; TX Noise gate upper limit
+TX_NG_LOWER_LIMIT      const   400                 ; TX Noise gate lower limit
+TX_NG_FRAMES           const   10                  ; TX Noise gate Frames
+RX_NG_LIMIT            const   24                  ; RX Noise gate limit
+;CBUS 1
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   0 bit CBUS write register names
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_RESET        const   $01             ; CBUS General reset
+SP_SYNC         const   $02             ; SYNC command
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   8 bit CBUS write register names and bit names
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_SCRAMBLE     const   $04             ; SCRAMBLE control
+SP_AIG          const   $05             ; Analogue input gain
+SP_AOG          const   $06             ; Analogue output gain
+SP_POWERSAVE    const   $09             ; Powersave
+SP_VCFG         const   $07             ; Vocoder configuration
+SP_RADDR        const   $07             ; Remote address
+SP_LADDR        const   $08            ; Local address
+SP_PTTDELAY     const   $0a      
+SP_SVCREQ       const   $0e             ; Service request
+SVCREQ_DLOAD    const   $01
+SP_DECFRAME     const   $10             ; Decode frames 
+SP_EOVCOUNT     const   $0B
+SP_IOCTRL       const   $0F
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   16 bit CBUS write register names and bit names
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_VCTRL        const   $11             ; Vocoder control
+SP_VSRW             const   $19         ; VSR write 
+SP_IRQENAB          const   $1f         ; IRQ enable
+       ; 
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   8 bit CBUS read registers
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_MVCFG            const   $2c         ; Mirror of configuration
+SP_SVCACK           const   $2e         ; Service acknowledgement
+SVCACK_OK           const   $01    
+SP_ENCFRAME         const   $30         ; Encode frames
+SP_RSTAT            const   $26
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   16 bit CBUS read registers
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+SP_PLEVEL           const   $31  
+SP_MVCTRL           const   $3c         ; Mirror of control
+SP_STATUS           const   $40         ; Status
+
+VS_EOT              const   $0001
+VS_FHD              const   $0002
+VS_MIO              const   $2000
+VS_SVC              const   $4000
+VS_RDY              const   $8000
+SP_ENGUTH           const   $14
+SP_ENGLTH           const   $15
+SP_ENGSDY           const   $16
+SP_DNGTH           const   $17
+;CBUS 2
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   0 bit CBUS write register names
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_RESET2        const   $01             ; CBUS General reset
+SP_SYNC2         const   $02             ; SYNC command
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   8 bit CBUS write register names and bit names
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_SCRAMBLE2     const   $04             ; SCRAMBLE control
+SP_AIG2          const   $05             ; Analogue input gain
+SP_AOG2          const   $06             ; Analogue output gain
+SP_POWERSAVE2    const   $09             ; Powersave
+SP_VCFG2         const   $07             ; Vocoder configuration
+SP_RADDR2        const   $07             ; Remote address
+SP_LADDR2        const   $08            ; Local address
+SP_PTTDELAY2     const   $0a      
+SP_SVCREQ2       const   $0e             ; Service request
+SVCREQ_DLOAD2    const   $01
+SP_DECFRAME2     const   $10             ; Decode frames 
+
+SP_EOVCOUNT2     const   $0B
+SP_IOCTRL2       const   $0F
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   8 bit CBUS read registers
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+SP_MVCFG2            const   $2c         ; Mirror of configuration
+SP_SVCACK2           const   $2e         ; Service acknowledgement
+SVCACK_OK2           const   $01    
+SP_ENCFRAME2         const   $30         ; Encode frames
+SP_FHEADV2           const   $23
+SP_RSTAT2            const   $26
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Register non-16 bit CBUS registers to correct data width
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    register    #2,SP_RESET2,#0
+    register    #2,SP_SYNC2,#0
+    register    #2,SP_AOG2,#1
+    register    #2,SP_AIG2,#1
+    register    #2,SP_VCFG2,#1
+    register    #2,SP_POWERSAVE2,#1    
+    register    #2,SP_SVCREQ2,#1
+    register    #2,SP_DECFRAME2,#1
+    register    #2,SP_MVCFG2,#1
+    register    #2,SP_SVCACK2,#1
+    register    #2,SP_ENCFRAME2,#1  
+    register    #2,SP_SCRAMBLE2,#1   
+    register    #2,SP_PTTDELAY2,#1    
+    register    #2,SP_EOVCOUNT2,#1 
+    register    #2,SP_IOCTRL2,#1 
+    register    #2,SP_RADDR2,#1   
+    register    #2,SP_LADDR2,#1 
+    register    #2,SP_FHEADV2,#1
+    register    #2,SP_RSTAT2,#1 
+    register    #2,SVCACK_OK,#1
+    register    #2,SVCREQ_DLOAD,#1    
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Other handy values
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+PRSIZE      const   128                 ; Image record size
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Script variables
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+gStatus     word    0                   ; Global status register shadow
+gStatus2     word    0                   ; Global status register shadow
+temp        word    0                   ; Temporary variable
+FileSize    word    0
+cdat        buffer	128
+index       word    0
+TEMP        word    0
+deviceno    word    1
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Register non-16 bit CBUS registers to correct data width
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    register    #1,SP_RESET,#0
+    register    #1,SP_SYNC,#0
+    register    #1,SP_AOG,#1
+    register    #1,SP_AIG,#1
+    register    #1,SP_VCFG,#1
+    register    #1,SP_POWERSAVE,#1    
+    register    #1,SP_SVCREQ,#1
+    register    #1,SP_DECFRAME,#1
+    register    #1,SP_MVCFG,#1
+    register    #1,SP_SVCACK,#1
+    register    #1,SP_ENCFRAME,#1  
+    register    #1,SP_SCRAMBLE,#1   
+    register    #1,SP_PTTDELAY,#1    
+    register    #1,SP_EOVCOUNT,#1 
+    register    #1,SP_IOCTRL,#1 
+    register    #1,SP_RADDR,#1   
+    register    #1,SP_LADDR,#1 
+    register    #1,SP_RSTAT,#1  
+    register    #1,SVCACK_OK,#1
+    register    #1,SVCREQ_DLOAD,#1
+;   **************************************************************************
+;  **************************************************************************
+; *
+; *     Main script sequence.
+; *
+;  **************************************************************************
+;   **************************************************************************
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Check vocoder device is attached to the CBUS, establish an
+;   +       interrupt handler, and then turn on interrupts.
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    ;
+    device      1
+    copy        #0,*SP_RESET
+    delay       #10
+    device      2
+    copy        #0,*SP_RESET2
+    delay       #10
+    disp        "Script starting, checking device is present"
+    jsr         CheckForDevice
+    disp        "Device1 seems to be present"
+    jsr         CheckForDevice2
+    disp        "Device2 seems to be present"    
+    Device      1
+    setvect     1,HandleIrqn1           ; Define interrupt handler 1
+    copy        *$40,temp               ; Clear any pending interrupt
+    copy        #0,gStatus              ; Clear global status shadow
+
+
+    setvect     2,HandleIrqn2           ; Define interrupt handler 2
+    copy        *$40,temp               ; Clear any pending interrupt
+    copy        #0,gStatus2              ; Clear global status shadow#
+  
+    intson                              ; Enable interrupts
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Send in VSR function image, reset the VSR subsystem and then display
+;   +       some statistics.
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    fopenr      "fi7011_1041.ped","%02x",FileSize
+    intsoff
+    copy        1,deviceno
+    Device      1
+    intson
+    copy        #0,*SP_RESET
+    delay       #10
+    jsr         VsrSendImage 
+    fopenr      "fi7011_1041.ped","%02x",FileSize
+    intsoff
+    copy        2,deviceno
+    Device      2
+    intson
+    jsr         VsrSendImage2    
+
+    
+
+    intsoff
+    copy        2,deviceno ;
+    Device      2
+    intson
+    copy        $3, *SP_POWERSAVE2   ; Set master codec clock on and enable bias
+    copy        $7, *SP_AOG2         ; Set output gain to 0dB
+    copy        $3, *SP_AIG2         ; Set input gain to 22.5 dB and microphone amp
+    copy        $0C, *SP_PTTDELAY2   ; Set PTT delay to 2
+    copy        $13, *SP_EOVCOUNT2   ; Set EVO frames, 1 for RX and 3 to TX
+    copy        $35, *SP_LADDR2      ; setup local address
+    copy        $35, *SP_RADDR2      ; setup remote address
+    copy        $F, *SP_SCRAMBLE2    ; Set scramble off
+    jsr         WaitRDY2             ; Wait for ready flag
+
+
+     intsoff
+    copy        2,deviceno           ;
+    Device      2
+    
+    copy        $8043, *SP_IRQENAB  ; Enable interrupt for Ready, frame head detect and Peak level bits
+    intson    
+    copy        RX_NG_LIMIT, *SP_DNGTH
+    copy        $00, *SP_IOCTRL2     ; Set OUT1 - OUT3 to outputs
+    copy        $40, *SP_IOCTRL2     ; Set OUT1 - OUT3 off   
+    copy        $83, *SP_IOCTRL2     ; Set OUT1 on  
+    copy        $2001, *SP_VCTRL       ; Set Control register to rx
+    jsr         WaitRDY2             ; Wait for ready flag    
+    disp        "Start searching for a frame header "
+    
+    
+    
+    intsoff
+    copy        1,deviceno
+    Device      1
+    intson     
+
+    copy        TX_NG_UPPER_LIMIT, *SP_ENGUTH
+    copy        TX_NG_LOWER_LIMIT, *SP_ENGLTH
+    copy        TX_NG_FRAMES, *SP_ENGSDY
+    copy        $3, *SP_POWERSAVE       ; Set master codec clock on and enable bias
+    copy        $7, *SP_AOG             ; Set output gain to 0dB
+    copy        $00, *SP_AIG            ; Set input gain to 22.5 dB and microphone amp
+    copy        $0C, *SP_PTTDELAY       ; Set PTT delay to 2
+    copy        $13, *SP_EOVCOUNT       ; Set EVO frames, 1 for RX and 3 to TX
+    copy        $35, *SP_LADDR          ; setup local address
+    copy        $35, *SP_RADDR          ; setup remote address
+ 
+    copy        $8043, *SP_IRQENAB      ; Enable interrupts for Ready and Peak level
+    copy        $00, *SP_IOCTRL         ; Set OUT1 - OUT3 to outputs
+    copy        $40, *SP_IOCTRL         ; Set OUT1 - OUT3 off  
+    copy        $87, *SP_IOCTRL         ; Set OUT2 on.      
+    copy        $F, *SP_SCRAMBLE        ; Set scramble off    
+  
+    jsr         WaitRDY                 ; Wait for ready flag
+  
+    copy        $2002, *SP_VCTRL           ; Set Control register to Tx
+        
+    jsr         WaitRDY                 ; Wait for ready flag      
+    
+    
+    intsoff
+    copy        2,deviceno
+    Device      2
+    intson
+    jsr         WaitFHD2
+  
+    if          ( *SP_FHEADV2 & $80)  ; Check that the Frame Head Detected is Valid
+    disp        "Header Valid, receiving"
+    endif    
+    dialog     "Stop TX" 
+    intsoff
+    copy        1,deviceno
+    Device      1
+    intson     
+
+    copy        $0, *SP_VCTRL           ; Set Control register to Tx    ;stop transmission
+    intsoff
+    copy        2,deviceno
+    Device      2
+    intson   
+    
+    jsr         WaitEOT2   
+    disp        "End of transmission"   
+    if          ( *SP_RSTAT2 = $2)  ; 
+    disp        "Too many CRC errors"
+    endif     
+    if          ( *SP_RSTAT2 = $1)  ; 
+    disp        "End of tranmission recieved"
+    endif   
+   
+    disp        "Finish"     ;wait for end and signal reason for termination.
+
+    
+
+
+    
+    
+  
+
+ 
+
+
+    
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Clean up and stop script
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   intsoff
+    stop
+
+;   **************************************************************************
+;  **************************************************************************
+; *
+; *     Support subroutines
+; *
+;  **************************************************************************
+;   **************************************************************************
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Send a function image to the device
+;   +
+;   +   Requires:
+;   +       Image file to be opened with fopenr with "%02x" format
+;   +       File item count to be placed in the variable 'FileSize'
+;   +
+;   +   Example:
+;   +       fopenr  "func_image.ped","%02x",FileSize
+;   +       jsr     VsrSendImage
+;   +
+;   +   Results:
+;   +       Subroutine stops script on error
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+VsiTemp     word    0
+VsiCount    word    0
+VsiBuffer   buffer  128
+VsrSendImage
+    copy        #0,gStatus
+    copy        #0,*SP_RESET
+    jsr         WaitRDY
+    disp        "Device reset"
+    copy        VS_RDY,VsiTemp
+    or          VS_SVC,VsiTemp
+    copy        VsiTemp,*SP_IRQENAB
+    copy        SVCREQ_DLOAD,*SP_SVCREQ
+    jsr         WaitSVC
+    copy        *SP_SVCACK,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiSendData
+    disp        "Device has rejected download request"
+    stop
+VsiSendData
+    jmpc        FileSize < PRSIZE,VsiEndData
+    copy        0,VsiCount
+    while   VsiCount < PRSIZE
+        filer   VsiBuffer[VsiCount++]
+    endwhile
+    write       VsiBuffer[0],*SP_DECFRAME,PRSIZE
+    jsr         WaitSVC
+    copy        *SP_SVCACK,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiSendData
+    disp        "Device rejected data packet"
+    stop
+VsiEndData
+    copy        SVCREQ_DLOAD,*SP_SVCREQ 
+    jsr          WaitRDY ; WaitSVC ;last check is different
+    copy        *SP_SVCACK,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiEndImage
+    disp        "Device rejected function image"
+    stop
+VsiEndImage
+    disp        "Function image loaded  Device 1"
+    return
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Send a function image to the device
+;   +
+;   +   Requires:
+;   +       Image file to be opened with fopenr with "%02x" format
+;   +       File item count to be placed in the variable 'FileSize'
+;   +
+;   +   Example:
+;   +       fopenr  "func_image.ped","%02x",FileSize
+;   +       jsr     VsrSendImage
+;   +
+;   +   Results:
+;   +       Subroutine stops script on error
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;VsiTemp     word    0
+;VsiCount    word    0
+;VsiBuffer   buffer  128
+
+VsrSendImage2
+    copy        0,VsiTemp
+    copy        0,VsiCount
+    Device      2
+    copy        #0,gStatus2
+    copy        #0,*SP_RESET2
+    jsr         WaitRDY2
+    disp        "Device reset"
+    copy        VS_RDY,VsiTemp
+    or          VS_SVC,VsiTemp
+    copy        VsiTemp,*SP_IRQENAB
+    copy        SVCREQ_DLOAD,*SP_SVCREQ2
+    jsr         WaitSVC2
+    copy        *SP_SVCACK2,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiSendData2
+    disp        "Device has rejected download request"
+    stop
+VsiSendData2
+    jmpc        FileSize < PRSIZE,VsiEndData2
+    copy        0,VsiCount
+    while   VsiCount < PRSIZE
+    filer   VsiBuffer[VsiCount++]
+    endwhile
+    write       VsiBuffer[0],*SP_DECFRAME2,PRSIZE
+    jsr         WaitSVC2
+    copy        *SP_SVCACK2,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiSendData2
+    disp        "Device rejected data packet"
+    stop
+VsiEndData2
+    copy        SVCREQ_DLOAD,*SP_SVCREQ2 
+    jsr          WaitRDY2 ; WaitSVC ;last check is different
+    copy        *SP_SVCACK2,VsiTemp
+    and         SVCACK_OK,VsiTemp
+    jmpc        VsiTemp == SVCACK_OK,VsiEndImage2
+    disp        "Device rejected function image"
+    stop
+VsiEndImage2
+    disp        "Function image loaded Device 2"
+    return
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Check that the device is present and CBUS works OK
+;   +
+;   +   Requires:
+;   +       Nothing
+;   + 
+;   +   Example:
+;   +       jsr     CheckForDevice
+;   +
+;   +   Results:
+;   +       Subroutine displays message and reports if device is not found
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+CfdTemp     word    0
+CheckForDevice
+    Device      1
+    copy        #$55,*SP_VCFG
+    delay       #10
+    copy        *SP_MVCFG,CfdTemp
+    jmpc        CfdTemp == #$55,CfdPart2
+    disp        "Device does not seem to be there (8bit write/read $55)"
+    stop
+CfdPart2
+    copy        #$aa,*SP_VCFG
+    delay       #10
+    copy        *SP_MVCFG,CfdTemp
+    jmpc        CfdTemp == #$aa,CfdPart3
+    disp        "Device connection problem (8bit write/read $AA)"
+    stop
+CfdPart3
+    copy        #0,*SP_RESET
+    delay       #10
+    copy        #$5555,*SP_VCTRL
+    delay       #10
+    copy        *SP_MVCTRL,CfdTemp
+    jmpc        CfdTemp == #$5555,CfdPart4
+    disp        "Device connection problem (16 bit write/read $5555)"
+    stop
+CfdPart4
+    return
+    copy        #$aaaa,*SP_VCTRL
+    delay       #10
+    copy        *SP_MVCTRL,CfdTemp
+    jmpc        CfdTemp == #$aaaa,CfdPart5
+    disp        "Device connection problem (16 bit write/read $AAAA)"
+    stop
+CfdPart5
+    copy        #0,*SP_RESET
+    delay       #10
+    return
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Check that the device is present and CBUS works OK
+;   +
+;   +   Requires:
+;   +       Nothing
+;   + 
+;   +   Example:
+;   +       jsr     CheckForDevice
+;   +
+;   +   Results:
+;   +       Subroutine displays message and reports if device is not found
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;CfdTemp     word    0
+CheckForDevice2
+    Device      2
+    copy        #$55,*SP_VCFG2
+    delay       #10
+    copy        *SP_MVCFG2,CfdTemp
+    jmpc        CfdTemp == #$55,Cfd2Part2
+    disp        "Device does not seem to be there (8bit write/read $55)"
+    stop
+Cfd2Part2
+    copy        #$aa,*SP_VCFG2
+    delay       #10
+    copy        *SP_MVCFG2,CfdTemp
+    jmpc        CfdTemp == #$aa,Cfd2Part3
+    disp        "Device connection problem (8bit write/read $AA)"
+    stop
+Cfd2Part3
+    copy        #0,*SP_RESET2
+    delay       #10
+    copy        #$5555,*SP_VCTRL
+    delay       #10
+    copy        *SP_MVCTRL,CfdTemp
+    jmpc        CfdTemp == #$5555,Cfd2Part4
+    disp        "Device connection problem (16 bit write/read $5555)"
+    stop
+Cfd2Part4
+    return
+    copy        #$aaaa,*SP_VCTRL
+    delay       #10
+    copy        *SP_MVCTRL,CfdTemp
+    jmpc        CfdTemp == #$aaaa,Cfd2Part5
+    disp        "Device connection problem (16 bit write/read $AAAA)"
+    stop
+Cfd2Part5
+    copy        #0,*SP_RESET2
+    delay       #10
+    return
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Subroutines to wait for specific status bits.
+;   +
+;   +   Requires:
+;   +       Variable 'gStatus' to be declared and updated on interrupt
+;   +
+;   +   Example:
+;   +       jsr     WaitRDY     ; Wait for ready bit to be set.
+:   +
+;   +   Results:
+;   +       Clears the bit waited for in gStatus and then returns
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+wTemp       word    0
+
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for RDY - Ready
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitRDY
+    copy    gStatus,wTemp
+    and     VS_RDY,wTemp
+    jmpc    wTemp != VS_RDY,WaitRDY
+    xor     #$ffff,wTemp
+    and     wTemp,gStatus
+    return
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for SVC - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitSVC
+    copy    gStatus,wTemp
+    and     VS_SVC,wTemp
+    jmpc    wTemp != VS_SVC,WaitSVC ; 
+    xor     #$ffff,wTemp
+    and     wTemp,gStatus
+    return
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for MIO - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitMIO
+    copy    gStatus,wTemp
+    and     VS_MIO,wTemp
+    jmpc    wTemp != VS_MIO,WaitMIO ; 
+    xor     #$ffff,wTemp
+    and     wTemp,gStatus
+    return
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for FHD - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitFHD
+    copy    gStatus,wTemp
+    and     VS_FHD,wTemp
+    jmpc    wTemp != VS_FHD,WaitFHD ; 
+    xor     #$ffff,wTemp
+    and     wTemp,gStatus
+    return
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for FHD - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitEOT
+    copy    gStatus,wTemp
+    and     VS_EOT,wTemp
+    jmpc    wTemp != VS_EOT,WaitEOT ; 
+    xor     #$ffff,wTemp
+    and     wTemp,gStatus
+    return
+    
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Interrupt handler
+;   +
+;   +   Requires:
+;   +       Variable 'gStatus' to be declared
+;   +
+;   +   Example:
+;   +       setvect 1,HandleIrqn1
+;   +       intson
+;   +
+;   +   Results:
+;   +       Updates the variable 'gStatus'
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+HiTemp      word    0
+HandleIrqn1
+    Device      1
+    copy    *$40,HiTemp                 ; Read the status value from device
+    or      HiTemp,gStatus              ; Or it into the global value
+    Device      deviceno
+    rfi
+
+
+
+
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Subroutines to wait for specific status bits.
+;   +
+;   +   Requires:
+;   +       Variable 'gStatus' to be declared and updated on interrupt
+;   +
+;   +   Example:
+;   +       jsr     WaitRDY     ; Wait for ready bit to be set.
+:   +
+;   +   Results:
+;   +       Clears the bit waited for in gStatus and then returns
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+wTemp2       word    0
+
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for RDY - Ready
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitRDY2
+    copy    gStatus2,wTemp2
+    and     VS_RDY,wTemp2
+    jmpc    wTemp2 != VS_RDY,WaitRDY2
+    xor     #$ffff,wTemp2
+    and     wTemp2,gStatus2
+    return
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for SVC - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitSVC2
+    copy    gStatus2,wTemp2
+    and     VS_SVC,wTemp2
+    jmpc    wTemp2 != VS_SVC,WaitSVC2 ; 
+    xor     #$ffff,wTemp2
+    and     wTemp2,gStatus2
+    return
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for MIO - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitMIO2
+    copy    gStatus2,wTemp2
+    and     VS_MIO,wTemp2
+    jmpc    wTemp2 != VS_MIO,WaitMIO2 ; 
+    xor     #$ffff,wTemp2
+    and     wTemp2,gStatus2
+    return
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for FHD - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitFHD2
+    copy    gStatus2,wTemp2
+    and     VS_FHD,wTemp2
+    jmpc    wTemp2 != VS_FHD,WaitFHD2 ; 
+    xor     #$ffff,wTemp2
+    and     wTemp2,gStatus2
+    return
+
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Wait for FHD - Service
+;   +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+WaitEOT2
+    copy    gStatus2,wTemp2
+    and     VS_EOT,wTemp2
+    jmpc    wTemp2 != VS_EOT,WaitEOT2 ; 
+    xor     #$ffff,wTemp2
+    and     wTemp2,gStatus2
+    return
+    
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;   +   Interrupt handler 2
+;   +
+;   +   Requires:
+;   +       Variable 'gStatus2' to be declared
+;   +
+;   +   Example:
+;   +       setvect 2,HandleIrqn2
+;   +       intson
+;   +
+;   +   Results:
+;   +       Updates the variable 'gStatus2'
+;   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+HiTemp2      word    0
+HandleIrqn2
+    Device      2
+    copy    *$40,HiTemp2                 ; Read the status value from device
+    or      HiTemp2,gStatus2              ; Or it into the global value
+    Device      deviceno
+    rfi
