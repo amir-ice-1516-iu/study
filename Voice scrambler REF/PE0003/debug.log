@@ -1,4 +1,0 @@
-[1105/100612:ERROR:backend_impl.cc(2020)] Corrupt Index file
-[1105/100612:ERROR:cache_util_win.cc(20)] Unable to move the cache: 5
-[1105/100612:ERROR:cache_util.cc(134)] Unable to move cache folder C:\ProgramData\Altium\Altium Designer {1B3DC065-5D8D-4323-81D0-4089F53B35EF}\BrowserCache to C:\ProgramData\Altium\Altium Designer {1B3DC065-5D8D-4323-81D0-4089F53B35EF}\old_BrowserCache_000
-[1105/100612:ERROR:cache_creator.cc(129)] Unable to create cache
